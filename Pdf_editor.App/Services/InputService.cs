@@ -119,6 +119,37 @@ public class InputService(IPdfService pdfService) : IInputService
         return input;
     }
 
+    public string GetOutputFolderPath(string defaultFolder)
+    {
+        Console.WriteLine($"DEBUG: GetOutputFolderPath called with defaultFolder: '{defaultFolder}'");
+        Console.Write($"\nOutput folder path (press Enter for '{defaultFolder}'): ");
+        var input = Console.ReadLine()?.Trim().Trim('"');
+        Console.WriteLine($"DEBUG: User output folder input: '{input}'");
+
+        var folder = string.IsNullOrWhiteSpace(input) ? defaultFolder : input;
+
+        try
+        {
+            if (!Directory.Exists(folder))
+            {
+                Console.WriteLine($"DEBUG: Output folder does not exist, creating: {folder}");
+                Directory.CreateDirectory(folder);
+            }
+            Console.WriteLine($"DEBUG: Using output folder: {folder}");
+            return folder;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DEBUG: Failed to ensure output folder: {ex.Message}");
+            Console.WriteLine("Could not create output folder. Using default folder.");
+            if (!Directory.Exists(defaultFolder))
+            {
+                Directory.CreateDirectory(defaultFolder);
+            }
+            return defaultFolder;
+        }
+    }
+
     private int[] GetSequentialPages(int totalPages)
     {
         while (true)

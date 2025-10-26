@@ -1,6 +1,7 @@
 using iText.Kernel.Pdf;
 using iText.Kernel.Utils;
 using Pdf_editor.App.Interfaces;
+using Pdf_editor.App.Results;
 
 namespace Pdf_editor.App.Services;
 
@@ -101,6 +102,107 @@ public class PdfService : IPdfService
             }
             
             return false;
+        }
+    }
+
+    public BatchExtractionResult ExtractPagesToSeparateFiles(string inputPath, string outputFolder, int[] pageNumbers, string? baseFileName = null)
+    {
+        Console.WriteLine($"DEBUG: Starting split extraction from '{inputPath}' into folder '{outputFolder}'");
+        Console.WriteLine($"DEBUG: Pages to extract: [{string.Join(", ", pageNumbers)}]");
+
+        var createdFiles = new List<string>();
+
+        try
+        {
+            if (!File.Exists(inputPath))
+            {
+                return new BatchExtractionResult
+                {
+                    Success = false,
+                    Message = $"Input file does not exist: {inputPath}",
+                    OutputFolder = outputFolder,
+                    FilesCreated = 0,
+                    CreatedFiles = createdFiles
+                };
+            }
+
+            // Ensure output folder exists
+            if (!Directory.Exists(outputFolder))
+            {
+                Directory.CreateDirectory(outputFolder);
+            }
+
+            using var reader = new PdfReader(inputPath);
+            using var sourceDoc = new PdfDocument(reader);
+            var totalPages = sourceDoc.GetNumberOfPages();
+
+            var validPages = pageNumbers
+                .Where(p => p > 0 && p <= totalPages)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToArray();
+
+            if (validPages.Length == 0)
+            {
+                return new BatchExtractionResult
+                {
+                    Success = false,
+                    Message = "No valid pages to extract.",
+                    OutputFolder = outputFolder,
+                    FilesCreated = 0,
+                    CreatedFiles = createdFiles
+                };
+            }
+
+            var inputName = Path.GetFileNameWithoutExtension(inputPath);
+            var safeBase = string.IsNullOrWhiteSpace(baseFileName) ? inputName : baseFileName.Trim();
+
+            foreach (var page in validPages)
+            {
+                var outputPath = Path.Combine(outputFolder, $"{safeBase}_page_{page}.pdf");
+
+                // Remove pre-existing file
+                if (File.Exists(outputPath))
+                {
+                    File.Delete(outputPath);
+                }
+
+                var writerProps = new WriterProperties();
+                writerProps.SetCompressionLevel(CompressionConstants.DEFAULT_COMPRESSION);
+
+                using var writer = new PdfWriter(outputPath, writerProps);
+                using var targetDoc = new PdfDocument(writer);
+
+                sourceDoc.CopyPagesTo(page, page, targetDoc);
+
+                // Add metadata
+                targetDoc.GetDocumentInfo().SetTitle($"{safeBase} - Page {page}");
+                targetDoc.GetDocumentInfo().SetCreator("PDF Editor App");
+
+                createdFiles.Add(outputPath);
+                Console.WriteLine($"DEBUG: Created file: {outputPath}");
+            }
+
+            return new BatchExtractionResult
+            {
+                Success = true,
+                Message = $"Successfully extracted {createdFiles.Count} files.",
+                OutputFolder = outputFolder,
+                FilesCreated = createdFiles.Count,
+                CreatedFiles = createdFiles
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR: Split extraction failed: {ex.Message}");
+            return new BatchExtractionResult
+            {
+                Success = false,
+                Message = $"Split extraction failed: {ex.Message}",
+                OutputFolder = outputFolder,
+                FilesCreated = createdFiles.Count,
+                CreatedFiles = createdFiles
+            };
         }
     }
 
